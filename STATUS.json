@@ -1,0 +1,50 @@
+{
+  "num": 114,
+  "slug": "sentry-error-monitoring-pipeline",
+  "short_name": "Sentinel",
+  "target": "Sentry (Software Engineer Intern — error monitoring / observability; Python + JS/TS)",
+  "status": "DONE",
+  "phase": "4/4 - eval + bench + report (all Must-have v1 complete, measured)",
+  "measured_at": "2026-08-17",
+  "stack": "Python 3.12 + FastAPI + uvicorn + pydantic v2 + SQLite (WAL); TypeScript SDK on Node >=20 (tsc + vitest); pytest + coverage; Docker + docker-compose",
+  "store_choice": "SQLite (documented) — local, zero external services, all SQL isolated in sentinel/store.py",
+  "metrics_captured": true,
+  "tests": "48 pytest (95% coverage on sentinel/) + 16 vitest = 64 passing",
+  "bullets_filled": {
+    "grouping_precision": "1.000",
+    "grouping_recall": "0.947",
+    "grouping_f1": "0.973",
+    "false_merges": "0",
+    "false_splits": "1 (deliberate retry-wrapper split)",
+    "homogeneity": "1.000",
+    "completeness": "0.971",
+    "v_measure": "0.985",
+    "dedupe_ratio_stream": "416.7x (5000 events -> 12 issues)",
+    "dedupe_ratio_demo": "7.5x (30 events -> 4 issues, live socket)",
+    "throughput_http_eps": "716.2",
+    "throughput_raw_engine_eps": "25593.6",
+    "store_p50_ms": "1.65",
+    "store_p95_ms": "1.91",
+    "issues_p50_ms": "1.94",
+    "issues_p95_ms": "2.38",
+    "sdk_capture_p50_ms": "0.0099",
+    "sdk_capture_p95_ms": "0.0157",
+    "sdk_frames_per_event": "9",
+    "tests_total": "64 (48 pytest + 16 vitest)"
+  },
+  "measurement_methodology": {
+    "grouping": "pairwise precision/recall over all C(81,2)=3240 event pairs of a synthetic/crafted labeled dataset (eval/dataset.py, seed=1337; 81 events, 10 true groups); homogeneity/completeness are entropy-based (sklearn formulas, implemented in eval/grouping_eval.py); 1 deliberate false split (retry-wrapper frame) kept so recall is honest",
+    "dedupe": "seeded mixed stream (bench/util.py, seed=2024; 12 root causes) ingested via store_event; raw events / resulting issues",
+    "throughput": "5000 events; HTTP path = POST /api/store via FastAPI TestClient (ASGI, no socket) incl. JSON parse + pydantic + fingerprint + dedupe + alert eval; raw path = direct store_event over pre-built envelopes; on-disk SQLite WAL",
+    "latency": "in-process FastAPI TestClient (ASGI), excludes network socket; 2000 requests each, 100 warmup excluded; per-request perf_counter",
+    "sdk_overhead": "20000 iterations, error thrown 3 levels deep (9 frames/event), Node v22.23.1, in-memory transport (no network), performance.now() per call",
+    "e2e_demo": "scripts/run_demo.sh: uvicorn on 127.0.0.1:8000 + compiled SDK demo over a REAL socket -> 30 events -> 4 grouped issues, uncaught RangeError auto-captured, new_issue+threshold alerts fired"
+  },
+  "unmeasured": {
+    "socket_latency": "___ (latency/throughput measured in-process via TestClient, not over a real HTTP/TCP socket; socket path proven functional by the demo but not timed)",
+    "docker_compose_up": "compose stack (api + webhook + demo) provided and valid; base-image registry pulls intermittently timed out (DeadlineExceeded) in the build sandbox, so the socket demo is the verified end-to-end path"
+  },
+  "repo_url": "https://github.com/Mohith26/sentry-error-monitoring-pipeline",
+  "private": true,
+  "notes": "All Must-have v1 delivered: TypeScript SDK (uncaught handler + captureException + V8 stack parse -> normalized frames with in-app rules + context) -> Python FastAPI /api/store (pydantic boundary validation) -> deterministic SHA-1 stack-frame fingerprint grouping (line/col excluded; message normalization strips addr/hex/uuid/int+unit/quoted/email; in-app preferred; configurable rules) -> SQLite issue store with dedupe by (project,fingerprint) (first/last_seen, count, culprit, sample; idempotent re-delivery) -> query API (/issues filter+sort, /issues/{id}, resolve/ignore/unresolve) + alerts (new-issue + threshold-in-window -> log/webhook) + minimal HTML dashboard. Grouping precision 1.000 / recall 0.947 on a crafted labeled set (0 false merges, 1 honest false split). KEY HONESTY: latency/throughput are in-process TestClient (not socket); grouping dataset is synthetic/crafted; store is SQLite not Postgres (bullet template corrected). Out-of-scope (not built): source-map symbolication, per-project rate limiting/quotas, spike-detection alerts, production UI framework, real Sentry Relay/ClickHouse."
+}
