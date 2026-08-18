@@ -113,6 +113,17 @@ open http://localhost:8000/       # minimal dashboard
 open http://localhost:8000/docs   # OpenAPI UI
 ```
 
+### SDK platform support
+
+The SDK is **Node-first** (v1). Stack parsing (`src/stacktrace.ts`) is environment-agnostic
+— it parses the V8 `Error.stack` format used by both Node **and** Chromium browsers — and
+the envelope shape is identical. **Browser wiring is documented but not built in v1:** a
+browser build swaps two Node-only touch points in `src/client.ts` — `node:crypto`
+`randomBytes` → `crypto.getRandomValues`, and the `process.on("uncaughtException"/"unhandledRejection")`
+handlers → `window.addEventListener("error"/"unhandledrejection")` — behind the same
+`SentinelClient` API. The `Transport` interface already uses the global `fetch`, which
+works in the browser as-is.
+
 ### Configuration (env)
 
 | Var | Default | Purpose |
