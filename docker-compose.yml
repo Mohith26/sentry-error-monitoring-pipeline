@@ -1,0 +1,55 @@
+# One-command mini-Sentry: ingest API + webhook sink + the throwing SDK demo.
+#
+#   docker compose up --build
+#
+# The `demo` container throws a mix of errors, ships them to `api`, and prints the
+# grouped issues the server produced. `api` fires alerts to the `webhook` sink.
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      SENTINEL_DB: /data/sentinel.sqlite
+      SENTINEL_WEBHOOK_URL: http://webhook:9000/hook
+      SENTINEL_ALERT_THRESHOLD: "10"
+      SENTINEL_ALERT_WINDOW: "60"
+    volumes:
+      - sentinel-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  webhook:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["uvicorn", "webhook_sink.app:app", "--host", "0.0.0.0", "--port", "9000"]
+    ports:
+      - "9000:9000"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:9000/health"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  demo:
+    build:
+      context: ./sdk
+      dockerfile: Dockerfile
+    depends_on:
+      api:
+        condition: service_healthy
+      webhook:
+        condition: service_healthy
+    environment:
+      SENTINEL_URL: http://api:8000
+      SENTINEL_PROJECT: checkout
+
+volumes:
+  sentinel-data:

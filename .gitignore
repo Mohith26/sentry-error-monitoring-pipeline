@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.venv/
+venv/
+
+# Node / TypeScript SDK
+node_modules/
+sdk/dist/
+*.tsbuildinfo
+
+# Data (regenerated; SQLite store)
+data/
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+*.local
+
+# OS
+.DS_Store
