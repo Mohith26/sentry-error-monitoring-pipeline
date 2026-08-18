@@ -1,0 +1,24 @@
+{
+  "measurement": "in-process TestClient (ASGI), on-disk SQLite (WAL), excludes network socket",
+  "warmup_excluded": 100,
+  "store_events": 2100,
+  "store_issues": 12,
+  "store": {
+    "n": 2000,
+    "min_ms": 1.4665,
+    "p50_ms": 1.6484,
+    "p95_ms": 1.9109,
+    "p99_ms": 2.7066,
+    "max_ms": 16.8137,
+    "mean_ms": 1.6905
+  },
+  "issues_query": {
+    "n": 2000,
+    "min_ms": 1.7037,
+    "p50_ms": 1.9382,
+    "p95_ms": 2.3768,
+    "p99_ms": 4.1628,
+    "max_ms": 20.2573,
+    "mean_ms": 2.0277
+  }
+}

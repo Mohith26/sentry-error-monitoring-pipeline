@@ -1,0 +1,17 @@
+{
+  "events_posted": 5000,
+  "http_path": {
+    "measurement": "in-process TestClient (ASGI) POST /api/store, on-disk SQLite (WAL), excludes network socket; includes JSON parse + pydantic validation + grouping + dedupe + alert eval",
+    "elapsed_s": 6.9813,
+    "events_per_sec": 716.2,
+    "stored_events": 5000,
+    "resulting_issues": 12
+  },
+  "raw_engine_path": {
+    "measurement": "direct store_event() over pre-built envelopes (fingerprint + dedupe + SQLite on-disk WAL); no HTTP/ASGI, no JSON parse",
+    "elapsed_s": 0.1954,
+    "events_per_sec": 25593.6,
+    "stored_events": 5000,
+    "resulting_issues": 12
+  }
+}

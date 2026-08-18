@@ -1,0 +1,49 @@
+{
+  "measured_at": "2026-08-17 19:27:24",
+  "python": "3.12.13",
+  "platform": "macOS-26.4.1-arm64-arm-64bit",
+  "grouping": {
+    "events": 81,
+    "true_groups": 10,
+    "predicted_clusters": 11,
+    "precision": 1.0,
+    "recall": 0.9472,
+    "f1": 0.9729,
+    "false_merges": 0,
+    "false_splits": 1,
+    "homogeneity": 1.0,
+    "completeness": 0.9708
+  },
+  "dedupe": {
+    "raw_events": 5000,
+    "resulting_issues": 12,
+    "dedupe_ratio": 416.67
+  },
+  "throughput_http_events_per_sec": 716.2,
+  "throughput_raw_engine_events_per_sec": 25593.6,
+  "store_p50_ms": 1.6484,
+  "store_p95_ms": 1.9109,
+  "issues_p50_ms": 1.9382,
+  "issues_p95_ms": 2.3768,
+  "sdk_overhead": {
+    "measurement": "per-call wall time via performance.now(); Node v22.23.1; in-memory transport (no network). Error thrown from 3 levels deep.",
+    "node": "v22.23.1",
+    "stack_frames_per_event": 9,
+    "event_from_exception": {
+      "iterations": 20000,
+      "mean_ms": 0.011717,
+      "p50_ms": 0.009916,
+      "p95_ms": 0.015709,
+      "p99_ms": 0.052875,
+      "max_ms": 0.266042
+    },
+    "capture_exception_memory_transport": {
+      "iterations": 20000,
+      "mean_ms": 0.012614,
+      "p50_ms": 0.009792,
+      "p95_ms": 0.013542,
+      "p99_ms": 0.036791,
+      "max_ms": 3.579834
+    }
+  }
+}

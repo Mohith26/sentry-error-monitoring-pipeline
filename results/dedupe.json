@@ -1,0 +1,7 @@
+{
+  "measurement": "in-process store_event over a seeded mixed stream",
+  "root_causes_in_stream": 12,
+  "raw_events": 5000,
+  "resulting_issues": 12,
+  "dedupe_ratio": 416.67
+}

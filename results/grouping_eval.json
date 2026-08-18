@@ -1,0 +1,25 @@
+{
+  "dataset": "synthetic/crafted labeled grouping dataset (eval/dataset.py, seed=1337)",
+  "events": 81,
+  "true_groups": 10,
+  "predicted_clusters": 11,
+  "precision": 1.0,
+  "recall": 0.9472,
+  "f1": 0.9729,
+  "pairwise": {
+    "tp": 287,
+    "fp": 0,
+    "fn": 16,
+    "tn": 2937
+  },
+  "false_merges": 0,
+  "false_splits": 1,
+  "homogeneity": 1.0,
+  "completeness": 0.9708,
+  "v_measure": 0.9852,
+  "dedupe_ratio": 7.3636,
+  "split_groups": [
+    "G10_webhook_signature"
+  ],
+  "merged_clusters": []
+}
