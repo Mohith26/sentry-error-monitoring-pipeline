@@ -1,27 +1,12 @@
-# Sentinel — Error-Monitoring Ingest + Stack-Trace Grouping Pipeline (mini-Sentry)
+# Sentinel
 
-A miniature **error-monitoring pipeline in Sentry's own shape**: a **TypeScript SDK**
-captures uncaught exceptions + `captureException` with a normalized **stack trace** and
-context, and POSTs an event envelope to a **Python/FastAPI ingest API**, which
-**fingerprints the stack trace to group same-root-cause events into one Issue** (dedupe),
-stores events, and exposes a **query + alerting API** with a minimal dashboard.
-Benchmarked for **grouping precision/recall, dedupe ratio, ingest throughput, and query
-latency**.
+Sentinel is a miniature error-monitoring pipeline I built end to end: a TypeScript SDK captures uncaught exceptions and `captureException` calls with a normalized stack trace and context, then POSTs an event envelope to a Python/FastAPI ingest API, which fingerprints the stack trace to group same-root-cause events into one Issue, stores events, and exposes a query and alerting API with a minimal dashboard.
 
-> Built for a **Sentry — Software Engineer Intern** target (error monitoring /
-> observability; production **Python + JS/TS**). It rebuilds Sentry's single most
-> important algorithm — **issue grouping**: turning a flood of raw error events into a
-> deduplicated set of actionable issues by fingerprinting the stack trace (normalizing
-> frames, collapsing the volatile parts).
+The part I cared most about is issue grouping, the same fingerprint-then-group approach production error monitors use: turning a flood of raw error events into a deduplicated set of actionable issues by normalizing stack frames and collapsing the volatile parts. Everything else (SDK, store, alerts, dashboard) exists so that algorithm runs inside a realistic pipeline, and the whole thing is benchmarked for grouping precision/recall, dedupe ratio, ingest throughput, and query latency.
 
-> ### Data & measurement notes (read me)
-> - **100% synthetic, seeded** data (grouping dataset + mixed stream). No real records.
-> - **Grouping precision/recall is measured on a hand-crafted labeled dataset** that
->   contains **1 deliberate false split** so the recall number is honest, not curated.
-> - **Latency/throughput are measured in-process** (FastAPI `TestClient`), **not over a
->   network socket** — the socket path is proven by the end-to-end demo but not timed.
-> - Full methodology + every measured number: **[RESULTS.md](RESULTS.md)**; raw JSON in
->   `results/`; résumé bullets in **[BULLETS.md](BULLETS.md)**.
+## How grouping works
+
+The fingerprinter (`sentinel/grouping.py`) hashes the frame signature (per frame: normalized module + function), preferring in-app frames, with line/column numbers excluded so "same stack, different build" groups together. It falls back to exception type + normalized message, then to the message alone. Message normalization strips the volatile parts: memory addresses, hex, UUIDs, integers (including things like `2000ms`), quoted user data, emails. So `User 12345 not found` and `User 67890 not found` collapse into one issue. Fingerprints are deterministic (SHA-1), and the in-app frame rules are configurable.
 
 ## Pipeline
 
@@ -41,48 +26,7 @@ latency**.
                                                └──────────────────────────────────────┘
 ```
 
-**Grouping (the core), in `sentinel/grouping.py`:** fingerprint the **frame signature**
-(per frame: normalized module + function), preferring **in-app** frames, with
-**line/column numbers excluded** so "same stack, different build" groups. Fall back to
-exception type + normalized message, then to the message. Message normalization strips the
-volatile parts — memory addresses, hex, UUIDs, integers (incl. `2000ms`), quoted user data,
-emails — so `User 12345 not found` and `User 67890 not found` collapse. Deterministic
-(SHA-1). In-app frame rules are configurable.
-
-## Tech stack
-
-Python 3.12 · **FastAPI** + uvicorn · **SQLite** (WAL; documented choice — local,
-zero external services, all SQL isolated in `store.py`) · pydantic v2 · pytest + coverage.
-**TypeScript SDK** on Node ≥20, built with **tsc**, tested with **vitest**. Docker +
-docker-compose. Free/local, CPU-only, no external services or API keys.
-
-## Layout
-
-```
-sentinel/                Python package (the pipeline)
-  models.py              pydantic event envelope + issue models (boundary validation)
-  grouping.py            stack-trace fingerprinting — the core grouping algorithm
-  store.py               SQLite event+issue store, dedupe by (project, fingerprint)
-  alerts.py              new-issue + threshold(window) rules -> log / webhook sinks
-  config.py              env-driven server config
-  api.py                 FastAPI: /api/store, /issues[...], resolve/ignore, /alerts, dashboard
-sdk/                     TypeScript SDK (Node ≥20)
-  src/stacktrace.ts      V8 Error.stack -> normalized frames (in-app, app-relative)
-  src/client.ts          captureException/Message, envelope build, transport, handlers
-  src/index.ts           Sentry-style init()/captureException() functional API
-  test/                  vitest: stack parsing + client
-  demo/demo.ts           throws a mix of errors -> ships to the API -> prints grouped issues
-  bench/capture_overhead.ts   per-capture overhead -> results/sdk_overhead.json
-eval/                    labeled grouping dataset + precision/recall/homogeneity eval
-bench/                   dedupe + throughput + latency ; run_all -> results/*.json
-webhook_sink/            tiny FastAPI receiver so compose can show alert deliveries
-tests/                   48 pytest tests (grouping/dedupe/ingest/api/alerts/eval)
-results/*.json           committed measured numbers (2026-08-17)
-docker-compose.yml       api + webhook sink + throwing SDK demo (one command)
-RESULTS.md / BULLETS.md / STATUS.json
-```
-
-## Quickstart
+## Running it
 
 ```bash
 # Python
@@ -103,7 +47,7 @@ python -m bench.run_all                      # dedupe + throughput + latency
 ./scripts/run_demo.sh
 ```
 
-### One-command full stack (Docker)
+One-command full stack with Docker:
 
 ```bash
 docker compose up --build
@@ -113,18 +57,54 @@ open http://localhost:8000/       # minimal dashboard
 open http://localhost:8000/docs   # OpenAPI UI
 ```
 
-### SDK platform support
+## What's measured (2026-08-17)
 
-The SDK is **Node-first** (v1). Stack parsing (`src/stacktrace.ts`) is environment-agnostic
-— it parses the V8 `Error.stack` format used by both Node **and** Chromium browsers — and
-the envelope shape is identical. **Browser wiring is documented but not built in v1:** a
-browser build swaps two Node-only touch points in `src/client.ts` — `node:crypto`
-`randomBytes` → `crypto.getRandomValues`, and the `process.on("uncaughtException"/"unhandledRejection")`
-handlers → `window.addEventListener("error"/"unhandledrejection")` — behind the same
-`SentinelClient` API. The `Transport` interface already uses the global `fetch`, which
-works in the browser as-is.
+| Metric | Value | How measured |
+|---|---|---|
+| Grouping precision / recall | 1.000 / 0.947 (F1 0.973) | crafted labeled set (81 events, 10 groups) |
+| False merges / splits | 0 / 1 | 1 deliberate retry-wrapper split (kept on purpose) |
+| Homogeneity / completeness | 1.000 / 0.971 | entropy (V-measure 0.985) |
+| Dedupe ratio | 416.7x (5,000 -> 12) · demo 7.5x (30 -> 4) | seeded mixed stream · live socket demo |
+| Ingest throughput | 716 ev/s (HTTP) · 25,594 ev/s (raw engine) | in-process TestClient · direct `store_event` |
+| `/api/store` latency | p50 1.65 ms · p95 1.91 ms | in-process (TestClient), on-disk SQLite |
+| `/issues` latency | p50 1.94 ms · p95 2.38 ms | in-process (TestClient) |
+| SDK per-capture overhead | p50 0.0099 ms · p95 0.0157 ms (~12 µs) | 20k iters, in-memory transport, 9 frames |
+| Tests | 48 pytest (95% cov) + 16 vitest = 64 | pytest + vitest |
 
-### Configuration (env)
+Full methodology and reproduce steps in [RESULTS.md](RESULTS.md); raw JSON in `results/`.
+
+## Layout
+
+```
+sentinel/                Python package (the pipeline)
+  models.py              pydantic event envelope + issue models (boundary validation)
+  grouping.py            stack-trace fingerprinting (the core grouping algorithm)
+  store.py               SQLite event+issue store, dedupe by (project, fingerprint)
+  alerts.py              new-issue + threshold(window) rules -> log / webhook sinks
+  config.py              env-driven server config
+  api.py                 FastAPI: /api/store, /issues[...], resolve/ignore, /alerts, dashboard
+sdk/                     TypeScript SDK (Node ≥20)
+  src/stacktrace.ts      V8 Error.stack -> normalized frames (in-app, app-relative)
+  src/client.ts          captureException/Message, envelope build, transport, handlers
+  src/index.ts           init()/captureException() functional API
+  test/                  vitest: stack parsing + client
+  demo/demo.ts           throws a mix of errors -> ships to the API -> prints grouped issues
+  bench/capture_overhead.ts   per-capture overhead -> results/sdk_overhead.json
+eval/                    labeled grouping dataset + precision/recall/homogeneity eval
+bench/                   dedupe + throughput + latency ; run_all -> results/*.json
+webhook_sink/            tiny FastAPI receiver so compose can show alert deliveries
+tests/                   48 pytest tests (grouping/dedupe/ingest/api/alerts/eval)
+results/*.json           committed measured numbers (2026-08-17)
+docker-compose.yml       api + webhook sink + throwing SDK demo (one command)
+```
+
+Stack: Python 3.12, FastAPI + uvicorn, SQLite (WAL), pydantic v2, pytest + coverage; the SDK is TypeScript on Node 20+, built with tsc, tested with vitest. Free/local, CPU-only, no external services or API keys.
+
+## SDK platform support
+
+The SDK is Node-first (v1). Stack parsing (`src/stacktrace.ts`) is environment-agnostic: it parses the V8 `Error.stack` format used by both Node and Chromium browsers, and the envelope shape is identical. Browser wiring is documented but not built in v1. A browser build swaps two Node-only touch points in `src/client.ts` (`node:crypto` `randomBytes` for `crypto.getRandomValues`, and the `process.on("uncaughtException"/"unhandledRejection")` handlers for `window.addEventListener("error"/"unhandledrejection")`) behind the same `SentinelClient` API. The `Transport` interface already uses the global `fetch`, which works in the browser as-is.
+
+## Configuration
 
 | Var | Default | Purpose |
 |---|---|---|
@@ -132,14 +112,14 @@ works in the browser as-is.
 | `SENTINEL_ALERT_NEW_ISSUE` | `1` | fire an alert on the first sighting of a fingerprint |
 | `SENTINEL_ALERT_THRESHOLD` | `10` | fire when an issue's windowed event count crosses N (`0`/`off` disables) |
 | `SENTINEL_ALERT_WINDOW` | `60` | threshold window, seconds |
-| `SENTINEL_WEBHOOK_URL` | *(unset)* | POST alerts here (unset → log-only) |
+| `SENTINEL_WEBHOOK_URL` | *(unset)* | POST alerts here (unset means log-only) |
 | `SENTINEL_URL` / `SENTINEL_PROJECT` | `http://localhost:8000` / `checkout` | SDK demo target |
 
 ## API
 
 | Endpoint | Purpose |
 |---|---|
-| `POST /api/store` | validate + ingest an event envelope → `{id, issue_id, fingerprint, new_issue, alerts}` |
+| `POST /api/store` | validate + ingest an event envelope -> `{id, issue_id, fingerprint, new_issue, alerts}` |
 | `GET /issues` | filter by `project`/`level`/`status`, sort by `count`/`last_seen`/`first_seen` |
 | `GET /issues/{id}` | issue + its recent events |
 | `POST /issues/{id}/resolve` · `/ignore` · `/unresolve` | change issue status |
@@ -156,18 +136,11 @@ curl -s -X POST localhost:8000/api/store -H 'content-type: application/json' -d 
 curl -s "localhost:8000/issues?sort=count&order=desc" | python3 -m json.tool
 ```
 
-## Measured results (2026-08-17)
+## Limitations
 
-| Metric | Value | How measured |
-|---|---|---|
-| Grouping precision / recall | **1.000 / 0.947** (F1 0.973) | crafted labeled set (81 events, 10 groups) |
-| False merges / splits | **0 / 1** | 1 deliberate retry-wrapper split (honest) |
-| Homogeneity / completeness | **1.000 / 0.971** | entropy (V-measure 0.985) |
-| Dedupe ratio | **416.7×** (5,000 → 12) · demo **7.5×** (30 → 4) | seeded mixed stream · live socket demo |
-| Ingest throughput | **716 ev/s** (HTTP) · **25,594 ev/s** (raw engine) | in-process TestClient · direct `store_event` |
-| `/api/store` latency | p50 **1.65 ms** · p95 **1.91 ms** | in-process (TestClient), on-disk SQLite |
-| `/issues` latency | p50 **1.94 ms** · p95 **2.38 ms** | in-process (TestClient) |
-| SDK per-capture overhead | p50 **0.0099 ms** · p95 **0.0157 ms** (~12 µs) | 20k iters, in-memory transport, 9 frames |
-| Tests | **48 pytest** (95% cov) + **16 vitest** = **64** | — |
-
-Full detail, honesty tags, and exact reproduce steps in **[RESULTS.md](RESULTS.md)**.
+- All data is synthetic and seeded (grouping dataset plus a mixed stream generator); there is no real production error stream behind these numbers.
+- Grouping precision/recall is measured on a hand-crafted labeled dataset. It deliberately contains one false split (a retry-wrapper frame that shifts the signature) so the recall number reflects a real weakness of frame-signature grouping instead of being a curated 1.0.
+- Latency and throughput are measured in-process (FastAPI `TestClient`), not over a network socket. The socket path is proven working by the end-to-end demo, just not timed.
+- The store is SQLite, a deliberate choice to keep the project local, zero-dependency, and byte-reproducible. All SQL is isolated in `sentinel/store.py`, so a Postgres swap would touch only that file.
+- Frame-signature grouping is sensitive to inserted/entry frames; production monitors layer additional stack-trace normalization rules on top of this idea for exactly that reason.
+- Not built: source-map symbolication for minified JS, per-project rate limiting/quotas, spike-detection alerts, and any production UI framework.
